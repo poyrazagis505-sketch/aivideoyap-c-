@@ -21,25 +21,30 @@ def get_latest_video_request():
             return data[0]
     return None
 
-def generate_scene_story(prompt, style):
-    print(f"Yapay zeka görsel odaklı sahneleri kurguluyor... Konu: {prompt}")
+def generate_long_scenes(prompt, style, duration):
+    print(f"Yapay zeka uzun soluklu video için sahneleri türetiyor... Hedef Süre: {duration}s")
     
-    # Her sahneye özel hem metin hem de görsel arama/üretim anahtar kelimeleri (Promptlar)
-    scenes = [
-        {
-            "text": f"{prompt.capitalize()} konusunun ilk perdesi {style} tarzıyla açılıyor.",
-            "image_url": "https://picsum.photos/seed/scene1/1280/720" # Sahneye özel dinamik test görseli
-        },
-        {
-            "text": "Karakter etrafındaki gizemi çözmek için etrafına dikkatlice bakıyor.",
-            "image_url": "https://picsum.photos/seed/scene2/1280/720"
-        },
-        {
-            "text": "Ve nihayet gerçeğin gün yüzüne çıktığı o muazzam an yaşanıyor.",
-            "image_url": "https://picsum.photos/seed/scene3/1280/720"
-        }
+    # Süreye bağlı olarak sahne sayısını dinamik olarak artırıyoruz (20 dakikalık hedefe doğru ilk adım)
+    # Her sahne ortalama 5-6 saniye sürer varsayımıyla sahne listesini çoğaltıyoruz
+    base_scenes = [
+        {"text": f"{prompt.capitalize()} konusunun derinliklerine iniyoruz. Tarz: {style}.", "img_seed": "part1"},
+        {"text": "Zaman akıp gidiyor ve olaylar beklenmedik bir yöne evriliyor.", "img_seed": "part2"},
+        {"text": "Karakter karşısına çıkan engelleri aşmak için yeni bir yol arıyor.", "img_seed": "part3"},
+        {"text": "Gerçeğin perdesi aralanıyor ve sır perdesi çözülmeye başlıyor.", "img_seed": "part4"},
+        {"text": "Ve bu eşsiz yolculuğun final sahnesine doğru yaklaşıyoruz.", "img_seed": "part5"}
     ]
-    title = f"{prompt.capitalize()} - Görsel Sahne Serisi"
+    
+    # Süre uzunsa sahneleri döngüye sokup uzatabiliriz
+    scenes = []
+    target_count = max(3, int(duration // 10))
+    for i in range(target_count):
+        template = base_scenes[i % len(base_scenes)]
+        scenes.append({
+            "text": f"Bölüm {i+1}: {template['text']}",
+            "image_url": f"https://picsum.photos/seed/{template['img_seed']}_{i}/1280/720"
+        })
+        
+    title = f"{prompt.capitalize()} - Uzun Soluklu Seri"
     return title, scenes
 
 def download_image(url, filename):
@@ -50,33 +55,29 @@ def download_image(url, filename):
         return filename
     return None
 
-def create_visual_scene_videos(scenes):
-    print("Sahneler görseller ve seslerle giydirilerek render ediliyor...")
+def create_long_video(scenes):
+    print("Uzun video için sahneler render ediliyor...")
     clip_list = []
     
     for i, scene in enumerate(scenes):
         text = scene["text"]
         img_url = scene["image_url"]
         
-        # 1. Ses dosyasını oluştur
         audio_filename = f"scene_{i}.mp3"
         tts = gTTS(text=text, lang='tr', slow=False)
         tts.save(audio_filename)
         
         audio_clip = AudioFileClip(audio_filename)
-        duration = max(audio_clip.duration, 4.0) # Her sahne en az 4 saniye dursun
+        duration = max(audio_clip.duration, 5.0)
         
-        # 2. Sahne görselini indir
         img_filename = f"scene_{i}.jpg"
         download_image(img_url, img_filename)
         
-        # 3. Görseli MoviePy ile video klibine dönüştür ve sesi ekle
         image_clip = ImageClip(img_filename).set_duration(duration)
         scene_clip = image_clip.set_audio(audio_clip)
-        
         clip_list.append(scene_clip)
         
-    print("Tüm görsel sahneler birleştiriliyor...")
+    print("Tüm sahneler birleştirilerek final video oluşturuluyor...")
     final_video = concatenate_videoclips(clip_list)
     
     output_filename = "final_video.mp4"
@@ -95,10 +96,9 @@ def update_supabase(record_id, title, full_story_text):
         "title": title,
         "prompt": full_story_text,
         "status": "completed",
-        "video_url": "https://github.com/gorsel-sahne-videosu.mp4"
+        "video_url": "https://github.com/uzun-video.mp4"
     }
-    response = requests.patch(url, headers=headers, data=json.dumps(payload))
-    print(f"Supabase Güncelleme Kodu: {response.status_code}")
+    requests.patch(url, headers=headers, data=json.dumps(payload))
 
 if __name__ == "__main__":
     record = get_latest_video_request()
@@ -106,12 +106,13 @@ if __name__ == "__main__":
         rec_id = record["id"]
         prompt = record.get("prompt", "Gelecek")
         style = record.get("style", "Sinematik")
+        duration = record.get("duration", 30)
         
-        title, scenes = generate_scene_story(prompt, style)
+        title, scenes = generate_long_scenes(prompt, style, duration)
         full_text = " ".join([s["text"] for s in scenes])
         
-        create_visual_scene_videos(scenes)
+        create_long_video(scenes)
         update_supabase(rec_id, title, full_text)
-        print("Tebrikler kanka! Görsel destekli sahne motoru başarıyla tamamlandı.")
+        print("İşlem tamamdır kanka!")
     else:
-        print("Supabase'de bekleyen 'pending' durumunda video isteği bulunamadı.")
+        print("Bekleyen istek yok.")
