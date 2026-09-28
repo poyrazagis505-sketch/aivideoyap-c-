@@ -15,10 +15,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Gereksinimleri yukle
+      - name: Sistem kutuphanelerini ve python paketlerini yukle
         run: |
-          pip install --upgrade pip
-          pip install requests gTTS moviepy
+          python -m pip install --upgrade pip
+          pip install requests gTTS moviepy decorator imageio imageio-ffmpeg
 
       - name: main.py calistir ve videoyu uret
         env:
