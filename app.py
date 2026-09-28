@@ -19,12 +19,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🎬 AI Video Fabrikası - Kişisel Kontrol Paneli")
-st.write("Kanka sistem tamamen senin kontrolünde. Konuyu gir, videonu üret ve aşağıdan yönet!")
+st.title("🎬 AI Video Fabrikası - Dakika Esaslı Sürüm")
+st.write("Kanka süre artık tamamen **dakika** bazlı! 1 dakikadan 20 dakikaya kadar dilediğin gibi ayarla.")
 
-prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın geleceği ve evren")
+prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın gizli evreni ve geleceği")
 style = st.selectbox("Görsel / Anlatım Tarzı Seç:", ["Sinematik", "Cyberpunk", "Anime", "Realistik", "Karanlık ve Gizemli"])
-duration = st.slider("Video Süresi (Saniye):", 15, 120, 30)
+
+# Min 1 dakika, Max 20 dakika, Varsayılan 3 dakika
+duration_minutes = st.slider("Video Süresi (Dakika):", 1, 20, 3)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -33,11 +35,11 @@ if not SUPABASE_URL and "SUPABASE_URL" in st.secrets:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-if st.button("🚀 Videoyu Üretmeye Başla!"):
+if st.button("🚀 Epik Videoyu Üretmeye Başla!"):
     if not prompt:
         st.warning("Lütfen önce bir konu yaz kanka!")
     else:
-        with st.spinner("İstek Supabase'e işleniyor..."):
+        with st.spinner("İstek Supabase veritabanına işleniyor..."):
             url = f"{SUPABASE_URL}/rest/v1/videos"
             headers = {
                 "apikey": SUPABASE_KEY,
@@ -46,15 +48,15 @@ if st.button("🚀 Videoyu Üretmeye Başla!"):
                 "Prefer": "return=representation"
             }
             payload = {
-                "title": prompt[:30] + "...",
+                "title": prompt[:30] + f" ({duration_minutes} dk)",
                 "prompt": prompt,
                 "style": style,
-                "duration": duration,
+                "duration": duration_minutes, # Dakika olarak kaydediliyor
                 "status": "pending"
             }
             response = requests.post(url, headers=headers, data=json.dumps(payload))
             if response.status_code in [200, 201]:
-                st.success("Harika! İstek işleme alındı. GitHub Actions üzerinden çalıştırıp videonu üretebilirsin.")
+                st.success(f"Harika! {duration_minutes} dakikalık üretim emri verildi. GitHub Actions üzerinden çalıştırabilirsin.")
                 st.balloons()
             else:
                 st.error(f"Hata: {response.text}")
@@ -66,7 +68,7 @@ headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}"
 }
-response = requests.get(f"{SUPABASE_URL}/rest/v1/videos?select=*&order=created_desc", headers=headers)
+response = requests.get(f"{SUPABASE_URL}/rest/v1/videos?select=*&order=created_at.desc", headers=headers)
 if response.status_code == 200:
     videos = response.json()
     for v in videos:
@@ -75,15 +77,15 @@ if response.status_code == 200:
         st.write(f"{status_icon} **Başlık:** {v.get('title')} | **Durum:** `{status}`")
         
         if v.get('prompt'):
-            with st.expander("Hikaye ve Sahne Detaylarını Gör"):
+            with st.expander("Hikaye ve Bölüm Detaylarını Gör"):
                 st.write(v.get('prompt'))
                 
-        # Eğer video tamamlandıysa oynatıcı ve indirme alanını göster
         if status == 'completed':
             video_url = v.get('video_url')
             if video_url and video_url.startswith("http"):
                 st.video(video_url)
+                st.markdown(f"📥 [Videoyu Doğrudan İndir]({video_url})")
             else:
-                st.info("Video render edildi ancak harici link henüz eklenmedi. (İleride buraya Supabase Storage linkini basacağız)")
+                st.info("Video render edildi ancak bulut bağlantısı bekleniyor.")
                 
         st.markdown("---")
