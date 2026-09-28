@@ -2,7 +2,7 @@ import os
 import requests
 import json
 from gtts import gTTS
-from moviepy.editor import AudioFileClip, ColorClip
+from moviepy.editor import AudioFileClip, ColorClip, concatenate_videoclips
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -21,39 +21,48 @@ def get_latest_video_request():
             return data[0]
     return None
 
-def generate_ai_story(prompt, style, duration):
-    print(f"Yapay zeka hikayeyi yazıyor... Konu: {prompt}, Tarz: {style}")
-    story = (
-        f"{prompt.capitalize()} konusunu işleyen bu yapım, {style} tarzında kurgulanmıştır. "
-        f"Yaklaşık {duration} saniye sürecek bu eşsiz deneyim, izleyenleri büyüleyecek bir atmosfer sunuyor."
-    )
-    title = f"{prompt.capitalize()} - {style}"
-    return title, story
-
-def create_voiceover(story_text):
-    print("Seslendirme (TTS) dosyası oluşturuluyor...")
-    tts = gTTS(text=story_text, lang='tr', slow=False)
-    audio_filename = "voiceover.mp3"
-    tts.save(audio_filename)
-    return audio_filename
-
-def create_video_file(audio_filename, duration_sec):
-    print("Video render ediliyor (MoviePy motoru devrede)...")
-    audio_clip = AudioFileClip(audio_filename)
+def generate_scene_story(prompt, style):
+    print(f"Yapay zeka sahne bazlı hikaye kurguluyor... Konu: {prompt}")
     
-    # Kullanıcının seçtiği süre veya sesin süresi (hangisi uzunsa)
-    video_duration = max(audio_clip.duration, float(duration_sec))
+    # Şimdilik hikayeyi dinamik sahnelere bölüyoruz (İleride LLM API ile zenginleştireceğiz)
+    scenes = [
+        {"text": f"{prompt.capitalize()} hikayesi başlıyor. Atmosfer {style} tarzında kuruldu.", "visual": "Giriş sahnesi, genel plan"},
+        {"text": "Karakter etrafına baktı, karanlığın içinde parlayan detayları fark etti.", "visual": "Karakter sağa bakıyor, detay odak"},
+        {"text": "İşte o an, tüm bu gizemin sırrı gözler önüne serildi.", "visual": "Zirve noktası, sinematik kapanış"}
+    ]
+    title = f"{prompt.capitalize()} - Sahne Serisi"
+    return title, scenes
+
+def create_scene_videos(scenes):
+    print("Sahneler tek tek işleniyor ve seslendiriliyor...")
+    clip_list = []
     
-    # Koyu şık bir arka plan
-    bg_clip = ColorClip(size=(1280, 720), color=(15, 15, 25), duration=video_duration)
-    video_clip = bg_clip.set_audio(audio_clip)
+    for i, scene in enumerate(scenes):
+        text = scene["text"]
+        
+        # Her sahne için ses dosyası
+        audio_filename = f"scene_{i}.mp3"
+        tts = gTTS(text=text, lang='tr', slow=False)
+        tts.save(audio_filename)
+        
+        # Ses süresini al
+        audio_clip = AudioFileClip(audio_filename)
+        duration = max(audio_clip.duration, 3.0)
+        
+        # Sahne için arka plan (İleride her sahneye özel görsel ekleyeceğiz)
+        bg_clip = ColorClip(size=(1280, 720), color=(20 + (i*20), 20, 40), duration=duration)
+        scene_clip = bg_clip.set_audio(audio_clip)
+        
+        clip_list.append(scene_clip)
+        
+    print("Tüm sahneler başarıyla birleştiriliyor...")
+    final_video = concatenate_videoclips(clip_list)
     
     output_filename = "final_video.mp4"
-    video_clip.write_videofile(output_filename, fps=24, codec='libx264', audio_codec='aac')
-    print("Video dosyası başarıyla üretildi!")
+    final_video.write_videofile(output_filename, fps=24, codec='libx264', audio_codec='aac')
     return output_filename
 
-def update_supabase(record_id, title, story):
+def update_supabase(record_id, title, full_story_text):
     url = f"{SUPABASE_URL}/rest/v1/videos?id=eq.{record_id}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -63,9 +72,9 @@ def update_supabase(record_id, title, story):
     }
     payload = {
         "title": title,
-        "prompt": story,
-        "status": "completed", # Her şey bitti, durum tamamlandı!
-        "video_url": "https://github.com/ornek-video-linki.mp4"
+        "prompt": full_story_text,
+        "status": "completed",
+        "video_url": "https://github.com/sahne-videosu.mp4"
     }
     response = requests.patch(url, headers=headers, data=json.dumps(payload))
     print(f"Supabase Güncelleme Kodu: {response.status_code}")
@@ -76,19 +85,16 @@ if __name__ == "__main__":
         rec_id = record["id"]
         prompt = record.get("prompt", "Gelecek")
         style = record.get("style", "Sinematik")
-        duration = record.get("duration", 30)
         
-        # 1. Adım: Hikayeyi üret
-        title, story = generate_ai_story(prompt, style, duration)
+        # 1. Sahne bazlı hikaye üret
+        title, scenes = generate_scene_story(prompt, style)
+        full_text = " ".join([s["text"] for s in scenes])
         
-        # 2. Adım: Seslendir
-        audio_file = create_voiceover(story)
+        # 2. Sahne videolarını ve seslerini oluşturup birleştir
+        create_scene_videos(scenes)
         
-        # 3. Adım: Videoyu render'la
-        video_file = create_video_file(audio_file, duration)
-        
-        # 4. Adım: Supabase'e tamamlandı olarak kaydet
-        update_supabase(rec_id, title, story)
-        print("Tebrikler kanka! Sistem uçtan uca tek çalışmada başarıyla tamamlandı.")
+        # 3. Supabase'e kaydet
+        update_supabase(rec_id, title, full_text)
+        print("Tebrikler kanka! Sahne bazlı video üretim altyapısı başarıyla tamamlandı.")
     else:
         print("Supabase'de bekleyen 'pending' durumunda video isteği bulunamadı.")
