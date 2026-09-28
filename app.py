@@ -25,7 +25,7 @@ st.write("Kanka süre artık tamamen **dakika** bazlı! 1 dakikadan 20 dakikaya 
 prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın gizli evreni ve geleceği")
 style = st.selectbox("Görsel / Anlatım Tarzı Seç:", ["Sinematik", "Cyberpunk", "Anime", "Realistik", "Karanlık ve Gizemli"])
 
-# Min 1 dakika, Max 20 dakika, Varsayılan 3 dakika
+# Kesinlikle Dakika (1 - 20)
 duration_minutes = st.slider("Video Süresi (Dakika):", 1, 20, 3)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -51,7 +51,7 @@ if st.button("🚀 Epik Videoyu Üretmeye Başla!"):
                 "title": prompt[:30] + f" ({duration_minutes} dk)",
                 "prompt": prompt,
                 "style": style,
-                "duration": duration_minutes, # Dakika olarak kaydediliyor
+                "duration": duration_minutes,
                 "status": "pending"
             }
             response = requests.post(url, headers=headers, data=json.dumps(payload))
