@@ -25,7 +25,6 @@ st.write("Kanka süre artık tamamen **dakika** bazlı! 1 dakikadan 20 dakikaya 
 prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın gizli evreni ve geleceği")
 style = st.selectbox("Görsel / Anlatım Tarzı Seç:", ["Sinematik", "Cyberpunk", "Anime", "Realistik", "Karanlık ve Gizemli"])
 
-# Kesinlikle Dakika (1 - 20)
 duration_minutes = st.slider("Video Süresi (Dakika):", 1, 20, 3)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -62,13 +61,14 @@ if st.button("🚀 Epik Videoyu Üretmeye Başla!"):
                 st.error(f"Hata: {response.text}")
 
 st.markdown("---")
-st.subheader("📊 Üretilen Videolar ve Medya Oynatıcı")
+st.subheader("📊 Son Üretilen 3 Video")
 
 headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}"
 }
-response = requests.get(f"{SUPABASE_URL}/rest/v1/videos?select=*&order=created_at.desc", headers=headers)
+# İŞTE BURADA: Sadece en yeni 3 videoyu getiriyoruz! (&limit=3)
+response = requests.get(f"{SUPABASE_URL}/rest/v1/videos?select=*&order=created_at.desc&limit=3", headers=headers)
 if response.status_code == 200:
     videos = response.json()
     for v in videos:
