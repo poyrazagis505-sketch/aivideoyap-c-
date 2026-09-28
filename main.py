@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+from gtts import gTTS
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -16,18 +17,28 @@ def get_latest_video_request():
     if response.status_code == 200:
         data = response.json()
         if data:
-            return data[0] # Bekleyen ilk kaydı al
+            return data[0]
     return None
 
 def generate_ai_story(prompt, style, duration):
     print(f"Yapay zeka hikaye yazıyor... Konu: {prompt}, Tarz: {style}")
     
-    # Şimdilik Hugging Face veya ücretsiz açık kaynaklı birMantıkla veya simüle edilmiş akıllı LLM yapısıyla metin üretiyoruz
-    # İlerleyen aşamada buraya tam API bağlayacağız ama şimdi sistemi test edelim:
-    story = f"Bu hikaye '{prompt}' konusunu ele alıyor. {style} tarzında hazırlanmıştır ve yaklaşık {duration} saniye sürecek şekilde sahnelere ayrılmıştır. Yapay zeka dünyayı değiştirmeye devam ediyor."
-    title = f"{prompt.capitalize()} Hikayesi"
-    
+    # İleride buraya harici bir LLM API ekleyeceğiz, şimdilik muazzam bir hikaye şablonu oluşturuyoruz:
+    story = (
+        f"Bölüm 1. {prompt} temalı bu hikaye, {style} atmosferinde başlıyor. "
+        f"Zaman akıp giderken, bu eşsiz yolculuk yaklaşık {duration} saniye boyunca izleyicileri etkisi altına alacak. "
+        f"Geleceğin kapıları aralanıyor ve yapay zeka bu evrenin sınırlarını yeniden çiziyor."
+    )
+    title = f"{prompt.capitalize()} - {style}"
     return title, story
+
+def create_voiceover(story_text):
+    print("Seslendirme (TTS) dosyası oluşturuluyor...")
+    tts = gTTS(text=story_text, lang='tr', slow=False)
+    audio_filename = "voiceover.mp3"
+    tts.save(audio_filename)
+    print("Ses dosyası başarıyla oluşturuldu!")
+    return audio_filename
 
 def update_supabase(record_id, title, story):
     url = f"{SUPABASE_URL}/rest/v1/videos?id=eq.{record_id}"
@@ -39,8 +50,8 @@ def update_supabase(record_id, title, story):
     }
     payload = {
         "title": title,
-        "prompt": story, # Şimdilik hikayeyi prompt kolonuna veya yeni kolona yazabiliriz
-        "status": "story_ready"
+        "prompt": story,
+        "status": "audio_ready" # Durumu ses ve hikaye hazır olarak güncelliyoruz
     }
     response = requests.patch(url, headers=headers, data=json.dumps(payload))
     print(f"Supabase Güncelleme Kodu: {response.status_code}")
@@ -54,7 +65,8 @@ if __name__ == "__main__":
         duration = record.get("duration", 30)
         
         title, story = generate_ai_story(prompt, style, duration)
+        audio_file = create_voiceover(story)
         update_supabase(rec_id, title, story)
-        print("1. Aşama başarıyla tamamlandı: Yapay zeka hikayeyi üretti ve kaydetti!")
+        print("Harika! Hikaye yazıldı ve ses dosyası başarıyla üretildi.")
     else:
         print("Supabase'de bekleyen 'pending' durumunda video isteği bulunamadı.")
