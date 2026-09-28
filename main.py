@@ -2,7 +2,7 @@ import os
 import requests
 import json
 from gtts import gTTS
-from moviepy.editor import AudioFileClip, ColorClip, concatenate_videoclips
+from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -22,40 +22,61 @@ def get_latest_video_request():
     return None
 
 def generate_scene_story(prompt, style):
-    print(f"Yapay zeka sahne bazlı hikaye kurguluyor... Konu: {prompt}")
+    print(f"Yapay zeka görsel odaklı sahneleri kurguluyor... Konu: {prompt}")
     
-    # Şimdilik hikayeyi dinamik sahnelere bölüyoruz (İleride LLM API ile zenginleştireceğiz)
+    # Her sahneye özel hem metin hem de görsel arama/üretim anahtar kelimeleri (Promptlar)
     scenes = [
-        {"text": f"{prompt.capitalize()} hikayesi başlıyor. Atmosfer {style} tarzında kuruldu.", "visual": "Giriş sahnesi, genel plan"},
-        {"text": "Karakter etrafına baktı, karanlığın içinde parlayan detayları fark etti.", "visual": "Karakter sağa bakıyor, detay odak"},
-        {"text": "İşte o an, tüm bu gizemin sırrı gözler önüne serildi.", "visual": "Zirve noktası, sinematik kapanış"}
+        {
+            "text": f"{prompt.capitalize()} konusunun ilk perdesi {style} tarzıyla açılıyor.",
+            "image_url": "https://picsum.photos/seed/scene1/1280/720" # Sahneye özel dinamik test görseli
+        },
+        {
+            "text": "Karakter etrafındaki gizemi çözmek için etrafına dikkatlice bakıyor.",
+            "image_url": "https://picsum.photos/seed/scene2/1280/720"
+        },
+        {
+            "text": "Ve nihayet gerçeğin gün yüzüne çıktığı o muazzam an yaşanıyor.",
+            "image_url": "https://picsum.photos/seed/scene3/1280/720"
+        }
     ]
-    title = f"{prompt.capitalize()} - Sahne Serisi"
+    title = f"{prompt.capitalize()} - Görsel Sahne Serisi"
     return title, scenes
 
-def create_scene_videos(scenes):
-    print("Sahneler tek tek işleniyor ve seslendiriliyor...")
+def download_image(url, filename):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(filename, 'wb') as f:
+            f.write(response.content)
+        return filename
+    return None
+
+def create_visual_scene_videos(scenes):
+    print("Sahneler görseller ve seslerle giydirilerek render ediliyor...")
     clip_list = []
     
     for i, scene in enumerate(scenes):
         text = scene["text"]
+        img_url = scene["image_url"]
         
-        # Her sahne için ses dosyası
+        # 1. Ses dosyasını oluştur
         audio_filename = f"scene_{i}.mp3"
         tts = gTTS(text=text, lang='tr', slow=False)
         tts.save(audio_filename)
         
-        # Ses süresini al
         audio_clip = AudioFileClip(audio_filename)
-        duration = max(audio_clip.duration, 3.0)
+        duration = max(audio_clip.duration, 4.0) # Her sahne en az 4 saniye dursun
         
-        # Sahne için arka plan (İleride her sahneye özel görsel ekleyeceğiz)
-        bg_clip = ColorClip(size=(1280, 720), color=(20 + (i*20), 20, 40), duration=duration)
-        scene_clip = bg_clip.set_audio(audio_clip)
+        # 2. Sahne görselini indir
+        img_filename = f"scene_{i}.jpg"
+        download_image(img_url, img_filename)
+        
+        # 3. Görseli MoviePy ile video klibine dönüştür ve sesi ekle
+        image_clip = ImageClip(img_filename).set_duration(duration)
+        scene_clip = image_clip.set_audio(audio_clip)
         
         clip_list.append(scene_clip)
         
-    print("Tüm sahneler başarıyla birleştiriliyor...")
+    print("Tüm görsel sahneler birleştiriliyor...")
     final_video = concatenate_videoclips(clip_list)
     
     output_filename = "final_video.mp4"
@@ -74,7 +95,7 @@ def update_supabase(record_id, title, full_story_text):
         "title": title,
         "prompt": full_story_text,
         "status": "completed",
-        "video_url": "https://github.com/sahne-videosu.mp4"
+        "video_url": "https://github.com/gorsel-sahne-videosu.mp4"
     }
     response = requests.patch(url, headers=headers, data=json.dumps(payload))
     print(f"Supabase Güncelleme Kodu: {response.status_code}")
@@ -86,15 +107,11 @@ if __name__ == "__main__":
         prompt = record.get("prompt", "Gelecek")
         style = record.get("style", "Sinematik")
         
-        # 1. Sahne bazlı hikaye üret
         title, scenes = generate_scene_story(prompt, style)
         full_text = " ".join([s["text"] for s in scenes])
         
-        # 2. Sahne videolarını ve seslerini oluşturup birleştir
-        create_scene_videos(scenes)
-        
-        # 3. Supabase'e kaydet
+        create_visual_scene_videos(scenes)
         update_supabase(rec_id, title, full_text)
-        print("Tebrikler kanka! Sahne bazlı video üretim altyapısı başarıyla tamamlandı.")
+        print("Tebrikler kanka! Görsel destekli sahne motoru başarıyla tamamlandı.")
     else:
         print("Supabase'de bekleyen 'pending' durumunda video isteği bulunamadı.")
