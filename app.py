@@ -3,7 +3,6 @@ import os
 import requests
 import json
 
-# Sayfa Ayarları ve Şık Tasarım
 st.set_page_config(page_title="AI Video Fabrikası", page_icon="🎬", layout="centered")
 
 st.markdown("""
@@ -21,10 +20,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎬 AI Video Fabrikası - Kontrol Paneli")
-st.write("Kanka hoş geldin! Tek tıkla yapay zeka video üretim motorunu tetikle.")
+st.write("Kanka sistem tam gaz çalışıyor. Konuyu gir, sahne bazlı videonu üret!")
 
-# Kullanıcı Girdileri
-prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın geleceği ve uzay yolculuğu")
+prompt = st.text_input("Videomuzun konusu ne olsun?", placeholder="Örn: Yapay zekanın gizli tarihi")
 style = st.selectbox("Görsel / Anlatım Tarzı Seç:", ["Sinematik", "Cyberpunk", "Anime", "Realistik", "Karanlık ve Gizemli"])
 duration = st.slider("Video Süresi (Saniye):", 15, 60, 30)
 
@@ -35,11 +33,11 @@ if not SUPABASE_URL and "SUPABASE_URL" in st.secrets:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-if st.button("🚀 Videoyu Tek Tuşla Üretmeye Başla!"):
+if st.button("🚀 Videoyu Üretmeye Başla!"):
     if not prompt:
-        st.warning("Lütfen önce bir konu yaz kanka!")
+        st.warning("Lütfen bir konu yaz kanka!")
     else:
-        with st.spinner("İstek Supabase veritabanına işleniyor..."):
+        with st.spinner("İstek Supabase'e işleniyor..."):
             url = f"{SUPABASE_URL}/rest/v1/videos"
             headers = {
                 "apikey": SUPABASE_KEY,
@@ -54,19 +52,16 @@ if st.button("🚀 Videoyu Tek Tuşla Üretmeye Başla!"):
                 "duration": duration,
                 "status": "pending"
             }
-            
             response = requests.post(url, headers=headers, data=json.dumps(payload))
-            
             if response.status_code in [200, 201]:
-                st.success("Harika! İstek sisteme düştü. Şimdi GitHub Actions üzerinden çalıştırıp videoyu üretebilirsin!")
+                st.success("Harika! İstek işleme alındı. GitHub Actions üzerinden çalıştırabilirsin.")
                 st.balloons()
             else:
-                st.error(f"Bir hata oluştu kanka: {response.text}")
+                st.error(f"Hata: {response.text}")
 
 st.markdown("---")
-st.subheader("📊 Sistem Durumu ve Geçmiş Üretimler")
+st.subheader("📊 Üretilen Videolar ve Medya Paneli")
 
-# Supabase'den kayıtları çekip gösterelim
 headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}"
@@ -78,7 +73,13 @@ if response.status_code == 200:
         status = v.get('status')
         status_icon = "🟢" if status == 'completed' else "🟡"
         st.write(f"{status_icon} **Başlık:** {v.get('title')} | **Durum:** `{status}`")
+        
         if v.get('prompt'):
-            with st.expander("Hikaye ve Detayları Gör"):
+            with st.expander("Hikaye Detayını Gör"):
                 st.write(v.get('prompt'))
+                
+        # Eğer video tamamlandıysa ileride buraya doğrudan oynatıcı ekleyeceğiz
+        if status == 'completed':
+            st.success("Bu video başarıyla render edildi!")
+            
         st.markdown("---")
