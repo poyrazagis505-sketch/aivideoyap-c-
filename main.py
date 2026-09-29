@@ -5,35 +5,32 @@ import json
 from gtts import gTTS
 from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
 
-# 1. URL'nin sonundaki gereksiz eğik çizgileri (slash) temizliyoruz!
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("KRİTİK HATA: GitHub Secrets içinde SUPABASE_URL veya SUPABASE_KEY bulunamadı!")
+    print("KRİTİK HATA: Supabase URL veya Key eksik!")
     sys.exit(1)
 
 def get_latest_video_request():
     print(f"Bağlanılan Supabase Adresi: {SUPABASE_URL}")
-    url = f"{SUPABASE_URL}/rest/v1/videos?status=eq.pending&select=*"
+    url = f"{SUPABASE_URL}/rest/v1/videos?status=eq.pending&select=*&order=created_at.desc&limit=1"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}"
     }
     
     response = requests.get(url, headers=headers)
-    
     if response.status_code != 200:
-        print(f"SUPABASE BAĞLANTI HATASI: {response.status_code} -> {response.text}")
+        print(f"SUPABASE BAĞLANTI HATASI: {response.text}")
         sys.exit(1)
         
     data = response.json()
     if not data:
-        print("SİSTEM UYARISI: Supabase'e başarıyla bağlanıldı ama 'pending' (bekleyen) hiçbir video bulunamadı!")
-        print("Lütfen Streamlit arayüzünden yeni bir video üretme isteği yolladığından emin ol.")
+        print("UYARI: 'pending' (bekleyen) video bulunamadı!")
         sys.exit(1)
         
-    print(f"Harika! Bekleyen video bulundu: {data[0].get('title')}")
+    print(f"İşlenecek Video Bulundu -> ID: {data[0]['id']} | Konu: {data[0].get('prompt')}")
     return data[0]
 
 def generate_long_scenes(prompt, style, duration_minutes):
@@ -63,24 +60,30 @@ def download_image(url, filename):
     return filename
 
 def upload_to_supabase_storage(file_path, file_name):
-    print("Video Supabase Storage (videos) klasörüne yükleniyor...")
+    print("Video Supabase Storage 'videos' klasörüne yükleniyor...")
     storage_url = f"{SUPABASE_URL}/storage/v1/object/videos/{file_name}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "video/mp4"
+        "Content-Type": "video/mp4",
+        "x-upsert": "true"  # Aynı isimde varsa üzerine yazsın
     }
     with open(file_path, 'rb') as f:
         response = requests.post(storage_url, headers=headers, data=f)
     
+    print(f"Storage Yükleme Yanıt Kodu: {response.status_code}")
+    print(f"Storage Yükleme Yanıt İçeriği: {response.text}")
+    
     if response.status_code in [200, 201]:
-        return f"{SUPABASE_URL}/storage/v1/object/public/videos/{file_name}"
+        public_url = f"{SUPABASE_URL}/storage/v1/object/public/videos/{file_name}"
+        print(f"Oluşan Public URL: {public_url}")
+        return public_url
     else:
-        print(f"YÜKLEME HATASI: {response.text}")
+        print(f"YÜKLEME BAŞARISIZ OLDU!")
         return None
 
 def create_long_video(scenes):
-    print("Render işlemi başlatıldı, klipler hazırlanıyor...")
+    print("Render işlemi başlatılıyor...")
     clip_list = []
     for i, scene in enumerate(scenes):
         audio_filename = f"scene_{i}.mp3"
@@ -102,6 +105,7 @@ def create_long_video(scenes):
     return output_filename
 
 def update_supabase(record_id, title, full_story_text, video_url):
+    print(f"Supabase veritabanı güncelleniyor (ID: {record_id})...")
     url = f"{SUPABASE_URL}/rest/v1/videos?id=eq.{record_id}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -115,7 +119,9 @@ def update_supabase(record_id, title, full_story_text, video_url):
         "status": "completed",
         "video_url": video_url
     }
-    requests.patch(url, headers=headers, data=json.dumps(payload))
+    response = requests.patch(url, headers=headers, data=json.dumps(payload))
+    print(f"Veritabanı Güncelleme Yanıt Kodu: {response.status_code}")
+    print(f"Veritabanı Güncelleme Yanıtı: {response.text}")
 
 if __name__ == "__main__":
     record = get_latest_video_request()
@@ -133,5 +139,8 @@ if __name__ == "__main__":
     unique_file_name = f"video_{rec_id}.mp4"
     public_video_url = upload_to_supabase_storage(video_file, unique_file_name)
     
-    update_supabase(rec_id, title, full_text, public_video_url if public_video_url else "")
-    print("Mükemmel! İşlem bitti ve arayüz güncellendi.")
+    if public_video_url:
+        update_supabase(rec_id, title, full_text, public_video_url)
+        print("İŞLEM TAMAMLANDI: Video başarıyla yüklendi ve veritabanı güncellendi!")
+    else:
+        print("HATA: Video storage yüklenemediği için veritabanı güncellenemedi.")
